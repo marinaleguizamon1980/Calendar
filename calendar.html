@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Calendario</title>
+
+<style>
+
+body{
+font-family:Arial;
+margin:8px;
+overflow:hidden;
+}
+
+#topBar{
+display:flex;
+gap:8px;
+align-items:center;
+margin-bottom:6px;
+flex-wrap:wrap;
+}
+
+#header{
+display:flex;
+justify-content:center;
+align-items:center;
+gap:20px;
+margin-bottom:5px;
+}
+
+input,select,button{
+padding:4px;
+font-size:12px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+table-layout:fixed;
+}
+
+th,td{
+border:1px solid #e0e0e0;
+height:90px;
+vertical-align:top;
+padding:2px;
+font-size:11px;
+}
+
+th{
+background:#f5f5f5;
+height:22px;
+}
+
+.today{
+background:#fff3cd;
+}
+
+.otherMonth{
+opacity:0.35;
+}
+
+.dayNumber{
+font-size:10px;
+font-weight:bold;
+}
+
+.event{
+font-size:10px;
+padding:1px 2px;
+border-radius:3px;
+color:white;
+cursor:grab;
+display:block;
+margin-top:1px;
+}
+
+.rangeEvent{
+width:8px;
+height:8px;
+border-radius:50%;
+display:inline-block;
+cursor:grab;
+margin:1px;
+}
+
+.monthTitle{
+font-size:16px;
+font-weight:bold;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="topBar">
+
+Desde:
+<input type="date" id="eventDateStart">
+
+Hasta:
+<input type="date" id="eventDateEnd">
+
+<input type="text" id="eventText" placeholder="Tarea">
+
+<select id="eventColor">
+<option value="#e74c3c">Rojo</option>
+<option value="#3498db">Azul</option>
+<option value="#2ecc71">Verde</option>
+<option value="#f1c40f">Amarillo</option>
+<option value="#9b59b6">Violeta</option>
+<option value="#95a5a6">Gris</option>
+</select>
+
+<button onclick="addEvent()">Agregar</button>
+
+</div>
+
+<div id="header">
+<button onclick="prevMonth()">◀</button>
+<div class="monthTitle" id="monthLabel"></div>
+<button onclick="nextMonth()">▶</button>
+</div>
+
+<div id="calendarContainer"></div>
+
+<script>
+
+let currentDate=new Date();
+
+const monthNames=[
+"Enero","Febrero","Marzo","Abril","Mayo","Junio",
+"Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+];
+
+function formatDate(y,m,d){
+return `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+
+function renderCalendar(){
+
+let month=currentDate.getMonth();
+let year=currentDate.getFullYear();
+
+document.getElementById("monthLabel").innerText=
+monthNames[month]+" "+year;
+
+document.getElementById("calendarContainer").innerHTML=
+renderMonth(currentDate);
+
+}
+
+function renderMonth(d){
+
+let month=d.getMonth();
+let year=d.getFullYear();
+
+let firstDay=new Date(year,month,1).getDay();
+let daysInMonth=new Date(year,month+1,0).getDate();
+let prevMonthDays=new Date(year,month,0).getDate();
+
+let start=(firstDay===0?6:firstDay-1);
+
+let html=`<table>
+<thead>
+<tr>
+<th>Lun</th>
+<th>Mar</th>
+<th>Mié</th>
+<th>Jue</th>
+<th>Vie</th>
+<th>Sáb</th>
+<th>Dom</th>
+</tr>
+</thead><tbody>`;
+
+let day=1;
+let nextDay=1;
+
+for(let i=0;i<6;i++){
+
+html+="<tr>";
+
+for(let j=0;j<7;j++){
+
+let cellDate;
+let otherMonth=false;
+
+if(i===0 && j<start){
+
+let prevDay=prevMonthDays-start+j+1;
+cellDate=new Date(year,month-1,prevDay);
+otherMonth=true;
+
+}else if(day>daysInMonth){
+
+cellDate=new Date(year,month+1,nextDay++);
+otherMonth=true;
+
+}else{
+
+cellDate=new Date(year,month,day++);
+}
+
+let y=cellDate.getFullYear();
+let m=cellDate.getMonth();
+let d=cellDate.getDate();
+
+let key=formatDate(y,m,d);
+
+let today=new Date().toISOString().split("T")[0];
+let todayClass=key===today?"today":"";
+
+html+=`
+<td
+class="${todayClass} ${otherMonth?'otherMonth':''}"
+ondragover="event.preventDefault()"
+ondrop="dropEvent(event,'${key}')"
+>
+<div class="dayNumber">${d}</div>
+${loadEvents(key)}
+</td>
+`;
+
+}
+
+html+="</tr>";
+
+}
+
+html+="</tbody></table>";
+
+return html;
+
+}
+
+function addEvent(){
+
+let start=document.getElementById("eventDateStart").value;
+let end=document.getElementById("eventDateEnd").value||start;
+let text=document.getElementById("eventText").value;
+let color=document.getElementById("eventColor").value;
+
+let current=new Date(start);
+let last=new Date(end);
+
+let isRange=start!==end;
+
+while(current<=last){
+
+let date=current.toISOString().split("T")[0];
+
+let events=JSON.parse(localStorage.getItem(date))||[];
+
+events.push({text,color,isRange});
+
+localStorage.setItem(date,JSON.stringify(events));
+
+current.setDate(current.getDate()+1);
+
+}
+
+renderCalendar();
+
+}
+
+function deleteEvent(date,index){
+
+if(!confirm("Eliminar evento?")) return;
+
+let events=JSON.parse(localStorage.getItem(date))||[];
+
+events.splice(index,1);
+
+localStorage.setItem(date,JSON.stringify(events));
+
+renderCalendar();
+
+}
+
+function dragEvent(e,date,index){
+
+e.dataTransfer.setData("date",date);
+e.dataTransfer.setData("index",index);
+
+}
+
+function dropEvent(e,newDate){
+
+let oldDate=e.dataTransfer.getData("date");
+let index=e.dataTransfer.getData("index");
+
+let events=JSON.parse(localStorage.getItem(oldDate))||[];
+let event=events[index];
+
+events.splice(index,1);
+
+localStorage.setItem(oldDate,JSON.stringify(events));
+
+let newEvents=JSON.parse(localStorage.getItem(newDate))||[];
+
+newEvents.push(event);
+
+localStorage.setItem(newDate,JSON.stringify(newEvents));
+
+renderCalendar();
+
+}
+
+function loadEvents(date){
+
+let events=JSON.parse(localStorage.getItem(date))||[];
+
+let html="";
+
+events.forEach((e,index)=>{
+
+if(e.isRange){
+
+html+=`
+<div
+class="rangeEvent"
+title="${e.text}"
+draggable="true"
+ondragstart="dragEvent(event,'${date}',${index})"
+onclick="deleteEvent('${date}',${index})"
+style="background:${e.color}">
+</div>`;
+
+}else{
+
+html+=`
+<div
+class="event"
+title="${e.text}"
+draggable="true"
+ondragstart="dragEvent(event,'${date}',${index})"
+onclick="deleteEvent('${date}',${index})"
+style="background:${e.color}">
+${e.text}
+</div>`;
+
+}
+
+});
+
+return html;
+
+}
+
+function prevMonth(){
+currentDate.setMonth(currentDate.getMonth()-1);
+renderCalendar();
+}
+
+function nextMonth(){
+currentDate.setMonth(currentDate.getMonth()+1);
+renderCalendar();
+}
+
+renderCalendar();
+
+</script>
+
+</body>
+</html>
